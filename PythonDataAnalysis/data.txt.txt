@@ -1,0 +1,12 @@
+Temperature: 5C
+
+
+Pressure: 9128hPa
+Location: 48.8584,2.2945
+
+Location: 51.5007,0.1246
+Altitude: 1234m
+Temperature: 145C
+Altitude: 234m
+Pressure:0.5hPa
+Location: 28.3772,81.5707
