@@ -25,7 +25,8 @@ File file;
 static const uint32_t buzzerPin = 2;
 
 float startTime = 0;
-float interval = 5000;
+float interval = 2000;
+float CoursePeriod = 1500;
 
 void setup()
 {
@@ -71,6 +72,21 @@ void setup()
 
 void loop()
 {
+  if (bmp.readAltitude(1013.25) > 650)
+  {
+    CoursePeriod = 1500;
+  } else if (bmp.readAltitude(1013.25) > 400)
+  {
+    CoursePeriod = 1000;
+  } else
+  {
+    CoursePeriod = 500;
+  }
+
+
+
+
+
   // This sketch displays information every time a new sentence is correctly encoded.
   while (Serial1.available() > 0)
     if (gps.encode(Serial1.read()))
@@ -198,13 +214,15 @@ void displayInfo()
   {
     startTime = millis();
     TransmitData();
+    tone(buzzerPin, 1000, 200);
+  }
+  if (millis() - startTime > CoursePeriod)
+  {
     Serial.println("Heading:");
     Serial.println(gps.course.deg());
     Serial.println("Target:");
     Serial.println(gps.course.deg());
     CourseCorrect(gps.course.deg());
-    //LoRa
-    tone(buzzerPin, 1000, 200);
   }
 
 }
@@ -277,28 +295,20 @@ void CourseCorrect(float heading)
 
   if (courseChange >= 345 || courseChange < 15)
   {
-    Serial.println("Keep Straight");
+    servoLeft.write(0);
+    servoRight.write(0);
   }
    else if (courseChange < 345 && courseChange > 180)
   {
     //Turn Right
     Serial.println("Turning Right");
     servoRight.write(-20);
-    delay(2000);
-    servoRight.write(0);
-    Serial.print("Done Steering");
-    
   }
   else if (courseChange > 15 && courseChange <= 180)
   {
     Serial.println("Turning Left");
     servoLeft.write(-20);
-    delay(2000);
-    servoLeft.write(0);
-    Serial.print("Done Steering");
-    
   }
   
 
 }
-
