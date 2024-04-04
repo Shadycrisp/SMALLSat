@@ -6,12 +6,12 @@
 #include <Servo.h>
 
 //GPS
-static const int RXPin = 0, TXPin = 1;
-static const uint32_t GPSBaud = 9600;
+
+const uint32_t GPSBaud = 9600;
 //LoRa
 const long frequency = 433E6;
-static const uint32_t csPin = 10;
-static const uint32_t rstPin = 9;
+const uint32_t csPin = 10;
+const uint32_t rstPin = 9;
 // The TinyGPSPlus object
 TinyGPSPlus gps;
 //BMP280 Object
@@ -22,7 +22,7 @@ Servo servoRight;
 
 //SD File
 File file;
-static const uint32_t buzzerPin = 2;
+const uint32_t buzzerPin = 2;
 
 float startTime = 0;
 float interval = 2000;
