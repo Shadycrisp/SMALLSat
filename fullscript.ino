@@ -6,10 +6,10 @@
 #include <Servo.h>
 
 //GPS
-
+const int SL = 7, SR = 8;
 const uint32_t GPSBaud = 9600;
 //LoRa
-const long frequency = 433E6;
+const int frequency = 433E6;
 const uint32_t csPin = 10;
 const uint32_t rstPin = 9;
 // The TinyGPSPlus object
@@ -25,8 +25,11 @@ File file;
 const uint32_t buzzerPin = 2;
 
 float startTime = 0;
-float interval = 2000;
+float interval = 500;
 float CoursePeriod = 1500;
+
+float preAltitude;
+bool launch = false;
 
 void setup()
 {
@@ -38,8 +41,9 @@ void setup()
   Serial.println("Could not find valid BMP280");
   while (1);
  }
-  servoLeft.attach(7);
-  servoLeft.attach(8);
+ preAltitude = bmp.readAltitude(1013.25);
+  servoLeft.attach(SL);
+  servoLeft.attach(SR);
 
 
   //SD Initialization
@@ -214,15 +218,31 @@ void displayInfo()
   {
     startTime = millis();
     TransmitData();
-    tone(buzzerPin, 1000, 200);
+    
   }
-  if (millis() - startTime > CoursePeriod)
+  if (millis() - startTime > CoursePeriod && !LowPower())
   {
     Serial.println("Heading:");
     Serial.println(gps.course.deg());
     Serial.println("Target:");
     Serial.println(gps.course.deg());
     CourseCorrect(gps.course.deg());
+  }
+  if (LowPower())
+  {
+    if (launch)
+    {
+      tone(buzzerPin, 1000, 200);
+    }
+    servoLeft.detach();
+    servoRight.detach();
+  } else
+  {
+    if (!servoLeft.attached() && !servoRight.attached())
+    {
+      servoLeft.attach(SL);
+      servoRight.attach(SR);
+    }
   }
 
 }
@@ -311,4 +331,17 @@ void CourseCorrect(float heading)
   }
   
 
+}
+
+bool LowPower()
+{
+  if (bmp.readAltitude(1013.25) > preAltitude + 5 || bmp.readAltitude(1013.25) < preAltitude - 5)
+  {
+    launch = true;
+    preAltitude = bmp.readAltitude(1013.25);
+    return false;
+  }
+  preAltitude = bmp.readAltitude(1013.25);
+
+  return true;
 }
