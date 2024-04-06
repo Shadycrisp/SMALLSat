@@ -1,25 +1,25 @@
 import processing.serial.*;
 
-Serial myPort; // The serial port
-String serialData; // For incoming serial data
-ArrayList<Float> xValues = new ArrayList<Float>(); // Dynamic array to store X magnetometer data
-ArrayList<Float> yValues = new ArrayList<Float>(); // Dynamic array to store Y magnetometer data
-ArrayList<Float> zValues = new ArrayList<Float>(); // Dynamic array to store Z magnetometer data
-int graphX = 80; // Starting position of the graph on the X axis
-int maxDataPoints = 500; // Maximum number of data points to display
-float graphWidth = 500; // Width of the graph
-float minY = -2000, maxY = 2000; // Y-axis range in nanoTesla (nT), adjust based on your sensor
+Serial myPort; 
+String serialData; 
+ArrayList<Float> xValues = new ArrayList<Float>(); 
+ArrayList<Float> yValues = new ArrayList<Float>(); 
+ArrayList<Float> zValues = new ArrayList<Float>(); 
+int graphX = 80; 
+int maxDataPoints = 500; 
+float graphWidth = 500;
+float minY = -2000, maxY = 2000; 
 
 void setup() {
   size(600, 600);
   println("Available serial ports:");
   printArray(Serial.list());
   myPort = new Serial(this, Serial.list()[0], 115200);
-  myPort.bufferUntil('\n'); // Read up to the newline character
+  myPort.bufferUntil('\n'); 
 }
 
 void draw() {
-  background(255); // Set background to white
+  background(255);
   drawGraph();
   drawAxes();
 }
@@ -30,18 +30,18 @@ void serialEvent(Serial myPort) {
                                                                             //Data from arudino has to be set the same, "\n" between each readings, and "MAG,x,y,z" for magnetometer output
   if (serialData.startsWith("MAG,")) {
     String[] magData = split(serialData.substring(4), ',');
-    if (magData.length == 4) { // Assuming "MAG," is included in the count
-      // Parse the X, Y, Z values
+    if (magData.length == 4) { 
+      
       float x = float(magData[1]);
       float y = float(magData[2]);
       float z = float(magData[3]);
       
-      // Add readings to their respective lists
+      
       xValues.add(x);
       yValues.add(y);
       zValues.add(z);
       
-      // Remove oldest data point if necessary
+     
       if (xValues.size() > maxDataPoints) {
         xValues.remove(0);
         yValues.remove(0);
@@ -70,7 +70,7 @@ void drawSingleAxisGraph(ArrayList<Float> values) {
   beginShape();
   for (int i = 0; i < values.size(); i++) {
     float x = map(i, 0, values.size(), graphX, graphX + graphWidth);
-    float y = map(values.get(i), minY, maxY, height-100, 100); // Map based on Y-axis range
+    float y = map(values.get(i), minY, maxY, height-100, 100); 
     vertex(x, y);
   }
   endShape();
