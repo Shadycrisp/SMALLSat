@@ -34,14 +34,12 @@ void serialEvent(Serial myPort) {
    
       float x = float(magData[1]);
       float y = float(magData[2]);
-      float z = float(magData[3]);
-      
+      float z = float(magData[3]);  
 
       xValues.add(x);
       yValues.add(y);
       zValues.add(z);
       
- 
       if (xValues.size() > maxDataPoints) {
         xValues.remove(0);
         yValues.remove(0);
