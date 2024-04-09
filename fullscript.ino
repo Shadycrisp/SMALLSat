@@ -47,6 +47,8 @@ String GPSData;
 String MagData;
 String FlightTime;
 
+bool lowPower = false;
+
 
 void setup()
 {
@@ -85,28 +87,30 @@ void loop()
     CoursePeriod = 500;
   } 
   // This sketch displays information every time a new sentence is correctly encoded.
-  while (Serial1.available() > 0)
+  while (Serial1.available() > 0){
     if (gps.encode(Serial1.read())) { //Difference between if and else is the ParseGPS() method(Attempting to parse only when there is valid data coming in)
-      ParseBMP();
       ParseGPS(true);
-      //ParseMAG();
-      displayInfo();
-      if (millis() - startTime > CoursePeriod){
-        CourseCorrect(ang, tAng);
-        startTime = millis();
-      }
-
     } else {
-      ParseBMP();
       ParseGPS(false);
-      //ParseMAG();
-      displayInfo();
-      if (millis() - startTime > CoursePeriod) {
+    }
+   
+    ParseBMP(); //Parses BMP Data
+    //ParseMAG(); //Parses Magnetometer data
+    displayInfo(); //Displays all info to serial/saves data to SD
+    if (!lowPower) //If the cansat is not in low power mode, course correcting adjustments can still be made, otherwise the servos are detached to save power.
+    {
+      if (millis() - startTime > CoursePeriod) { //Course corrects at the set frequency.
         CourseCorrect(ang, tAng);
         startTime = millis();
-      }
+      } 
+    } else {
+      servoLeft.detach();
+      servoRight.detach();
     }
     
+    lowPower = LowPower(); //Checks if the cansat is stationary.
+
+} 
 
 
 
@@ -230,4 +234,14 @@ void ParseFlightTime(){
 void ParseMAG()
 {
   //Parse magnetometer info...
+}
+bool LowPower()
+{
+  if (gps.speed < 2) //Check if the speed of the cansat is lower than 2m/s
+  {
+    return true;
+  } else
+  {
+    return false;
+  }
 }
