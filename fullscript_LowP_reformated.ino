@@ -12,8 +12,8 @@ const uint32_t GPSBaud = 9600;
 TinyGPSPlus gps;
 #define TARGET_LAT 4
 #define TARGET_LNG 1
-float ang;
-float tAng;
+float ang; //Heading (Angle)
+float tAng; //Target (Taget Angle)
 
 //LoRa
 const int frequency = 433E6;
