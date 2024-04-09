@@ -206,9 +206,7 @@ void displayInfo()
     Serial.println(F("INVALID"));
     file.println(F("Invalid"));
   }
-  file.println();
-  file.close();
-  Serial.println();
+  
 
   if (millis() - startTime > interval)
   {
@@ -221,10 +219,19 @@ void displayInfo()
     Serial.println("Heading:");
     Serial.println(gps.course.deg());
     Serial.println("Target:");
-    Serial.println(gps.courseTo(gps.location.lat(),gps.location.lng(), 48.8584, 2.2945));
+    Serial.println(gps.courseTo(gps.location.lat(),gps.location.lng(), 48.8584, 2.2945)); //change to actual destination
+    
+    file.println("Heading:");
+    file.println(gps.course.deg());
+    file.println("Target:");
+    file.println(gps.courseTo(gps.location.lat(),gps.location.lng(), 48.8584, 2.2945)); //change to actual destination
+    
     CourseCorrect(gps.course.deg());
   }
-
+  
+  file.println();
+  file.close();
+  Serial.println();
 }
 
 void TransmitData()
@@ -283,14 +290,19 @@ void TransmitData()
   {
     LoRa.println(F("INVALID"));
   }
-  LoRa.println();
 
+  LoRa.println("Heading:");
+  LoRa.println(gps.course.deg());
+  LoRa.println("Target:");
+  LoRa.println(gps.courseTo(gps.location.lat(),gps.location.lng(), 48.8584, 2.2945)); //change to actual destination
+  
+  LoRa.println();
   LoRa.endPacket();
 }
 
 void CourseCorrect(float heading)
 {
-  double courseToDest = gps.courseTo(gps.location.lat(), gps.location.lng(), 48.8584, 2.2945);
+  double courseToDest = gps.courseTo(gps.location.lat(), gps.location.lng(), 48.8584, 2.2945); //change to actual destination
   int courseChange = (int)(360 + courseToDest - heading) % 360;
 
   if (courseChange >= 345 || courseChange < 15)
