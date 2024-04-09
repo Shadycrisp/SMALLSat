@@ -223,8 +223,6 @@ void displayInfo()
     
     file.println("Heading:");
     file.println(gps.course.deg());
-    file.println("Target:");
-    file.println(gps.courseTo(gps.location.lat(),gps.location.lng(), 48.8584, 2.2945)); //change to actual destination
     
     CourseCorrect(gps.course.deg());
   }
@@ -293,8 +291,6 @@ void TransmitData()
 
   LoRa.println("Heading:");
   LoRa.println(gps.course.deg());
-  LoRa.println("Target:");
-  LoRa.println(gps.courseTo(gps.location.lat(),gps.location.lng(), 48.8584, 2.2945)); //change to actual destination
   
   LoRa.println();
   LoRa.endPacket();
