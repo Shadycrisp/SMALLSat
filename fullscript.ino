@@ -221,7 +221,7 @@ void displayInfo()
     Serial.println("Heading:");
     Serial.println(gps.course.deg());
     Serial.println("Target:");
-    Serial.println(gps.course.deg());
+    Serial.println(gps.courseTo(gps.location.lat(),gps.location.lng(), 48.8584, 2.2945));
     CourseCorrect(gps.course.deg());
   }
 
