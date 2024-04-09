@@ -110,14 +110,16 @@ void loop()
     
     lowPower = LowPower(); //Checks if the cansat is stationary.
 
-} 
-
-
-
+  } 
   if (millis() > 5000 && gps.charsProcessed() < 10)
   {
-    Serial.println(F("No GPS detected: check wiring."));
-    while(true);
+    Serial.println("GPS is offline :/");
+    ParseBMP();
+    //ParseMAG();
+    displayInfo();
+    Serial.println("Course Correct Failure(Unable to get location data)");
+    servoLeft.detach();
+    servoRight.detach();
   }
 }
 
