@@ -213,8 +213,8 @@ void ParseGPS(bool fix)
 {
   float lat = gps.location.lat();
   float lng = gps.location.lng();
-  ang = gps.course.deg();
-  tAng = gps.courseTo(lat, lng, TARGET_LAT, TARGET_LNG);
+  ang = gps.course.deg(); //Heading
+  tAng = gps.courseTo(lat, lng, TARGET_LAT, TARGET_LNG); //Target
   
   if (fix){
     GPSData = ("GPS: " + String(lat) + ", " + String(lng) + ", " + String(ang) + ", " + String(tAng));
