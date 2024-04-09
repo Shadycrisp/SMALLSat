@@ -55,7 +55,7 @@ void setup()
   Serial.begin(115200);
   Serial1.begin(GPSBaud);
   
-  if (!bmp.begin()) Serial.println("No BMP280"); //BMP initialization Undecided fail condition
+  if (!bmp.begin(0x77)) Serial.println("No BMP280"); //BMP initialization Undecided fail condition
 
   servoLeft.attach(LEFT_PIN); //Attaching Left Servo to correct pin
   servoRight.attach(RIGHT_PIN); //Attaching Left Servo to correct pin
