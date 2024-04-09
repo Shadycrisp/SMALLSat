@@ -1,3 +1,5 @@
+
+//Libraries
 #include <TinyGPSPlus.h>
 #include <SoftwareSerial.h>
 #include <Adafruit_BMP280.h>
@@ -6,66 +8,66 @@
 #include <Servo.h>
 
 //GPS
-
 const uint32_t GPSBaud = 9600;
-//LoRa
-const long frequency = 433E6;
-const uint32_t csPin = 10;
-const uint32_t rstPin = 9;
-// The TinyGPSPlus object
 TinyGPSPlus gps;
+#define TARGET_LAT 4
+#define TARGET_LNG 1
+float ang;
+float tAng;
+
+//LoRa
+const int frequency = 433E6;
+const uint32_t cs = 10;
+const uint32_t rst = 9;
+const uint32_t dio0 = 13;
+int packetNum = 1;
+
 //BMP280 Object
 Adafruit_BMP280 bmp;
+float alt;
+#define GND_P 1013.25
 
+//Servos
 Servo servoLeft;
 Servo servoRight;
+#define LEFT_PIN 7
+#define RIGHT_PIN 8
 
-//SD File
+//SD 
 File file;
 const uint32_t buzzerPin = 2;
 
+
 float startTime = 0;
-float interval = 2000;
-float CoursePeriod = 1500;
+float interval = 500; //Frequency of transmittion. Currently 2Hz
+float CoursePeriod = 500; //Frequency of course correction. Currently 2Hz
+
+String bmpData;
+String GPSData;
+String MagData;
+String FlightTime;
+
 
 void setup()
 {
   Serial.begin(115200);
   Serial1.begin(GPSBaud);
-  //BMP initialization
- if (!bmp.begin())
- {
-  Serial.println("Could not find valid BMP280");
-  while (1);
- }
-  servoLeft.attach(7);
-  servoLeft.attach(8);
+  
+  if (!bmp.begin()) Serial.println("No BMP280"); //BMP initialization Undecided fail condition
 
+  servoLeft.attach(LEFT_PIN); //Attaching Left Servo to correct pin
+  servoRight.attach(RIGHT_PIN); //Attaching Left Servo to correct pin
 
-  //SD Initialization
-  if (!SD.begin(BUILTIN_SDCARD))
-  {
-    Serial.println("SD Card Mount Failed");
-    while (1);
-  }
-
+  if (!SD.begin(BUILTIN_SDCARD)) Serial.println("No SD"); //SD Initialization Undecided Fail Condition
   file = SD.open("data.txt", FILE_WRITE);
-  if (!file)
-  {
-    Serial.println("Failed to open file for writing");
-  }
-  file.println("Log Begin:");
+  
+  if (!file) Serial.println("File Opening Failed(setup)"); //Checks for successful opening of SD file
+  file.println("Log Begin:"); 
   file.close();
 
-  //LoRa initialization
+  LoRa.setPins(cs, rst, dio0); //Set LoRa pins to correct connections
+  if (!LoRa.begin(frequency)) Serial.println("LoRa failed"); //LoRa Initialization Undecided Fail Condition
   
-
-  LoRa.setPins(csPin, rstPin, 13);
-  if (!LoRa.begin(frequency))
-  {
-    Serial.println("Starting LoRa failed!");
-    while (1);
-  }
 
   startTime = millis();
 }
@@ -81,16 +83,32 @@ void loop()
   } else
   {
     CoursePeriod = 500;
-  }
-
-
-
-
-
+  } 
   // This sketch displays information every time a new sentence is correctly encoded.
   while (Serial1.available() > 0)
-    if (gps.encode(Serial1.read()))
+    if (gps.encode(Serial1.read())) { //Difference between if and else is the ParseGPS() method(Attempting to parse only when there is valid data coming in)
+      ParseBMP();
+      ParseGPS(true);
+      //ParseMAG();
       displayInfo();
+      if (millis() - startTime > CoursePeriod){
+        CourseCorrect(ang, tAng);
+        startTime = millis();
+      }
+
+    } else {
+      ParseBMP();
+      ParseGPS(false);
+      //ParseMAG();
+      displayInfo();
+      if (millis() - startTime > CoursePeriod) {
+        CourseCorrect(ang, tAng);
+        startTime = millis();
+      }
+    }
+    
+
+
 
   if (millis() > 5000 && gps.charsProcessed() < 10)
   {
@@ -99,216 +117,117 @@ void loop()
   }
 }
 
+
 void displayInfo()
 {
   //float flat, flon, deg;
   file = SD.open("data.txt", FILE_WRITE);
-  if (!file)
-  {
-    Serial.println("Failed to open file for logging");
-    
+  if (!file) Serial.println("File Opening Failed(loop)"); //Open file for writing
 
-  }
-  Serial.print(F("Location: "));
-  file.print(F("Location: "));
-  if (gps.location.isValid())
-  {
-    Serial.print(gps.location.lat(), 6);
-    Serial.print(F(", "));
-    Serial.println(gps.location.lng(), 6);
-    //SD
-    file.print(gps.location.lat(), 6);
-    file.print(F(", "));
-    file.println(gps.location.lat(), 6);
-  }
-  else
-  {
-    Serial.println(F("INVALID"));
-    file.println(F("INVALID"));
-  }
-  //BMP280
-  //Temp
-  Serial.print("Temp:");
-  Serial.print(bmp.readTemperature());
-  Serial.println(" C");
-  //Pressure
-  Serial.print("Pressure:");
-  Serial.print(bmp.readPressure()/100.0F);
-  Serial.println(" hPa");
-  //Altitude
-  Serial.print("Altitude:");
-  Serial.print(bmp.readAltitude(1013.25)); //Standard Pressure at Sea level(hPa)
-  Serial.println("m");
-
-  //Write to file
-  file.print("Temp:");
-  file.print(bmp.readTemperature());
-  file.println(" C");
-  //Pressure
-  file.print("Pressure:");
-  file.print(bmp.readPressure()/100.0F);
-  file.println(" hPa");
-  //Altitude
-  file.print("Altitude:");
-  file.print(bmp.readAltitude(1013.25)); //Standard Pressure at Sea level(hPa)
-  file.println("m");
-
-  Serial.print(F("  Date/Time: "));
-  file.print(F("  Date/Time: "));
-  if (gps.date.isValid())
-  {
-    Serial.print(gps.date.month());
-    Serial.print(F("/"));
-    Serial.print(gps.date.day());
-    Serial.print(F("/"));
-    Serial.print(gps.date.year());
-    //SD
-    file.print(gps.date.month());
-    file.print(F("/"));
-    file.print(gps.date.day());
-    file.print(F("/"));
-    file.print(gps.date.year());
-  }
-  else
-  {
-    Serial.print(F("INVALID"));
-    file.print(F("INVALID"));
-  }
-
-  Serial.print(F(" "));
-  if (gps.time.isValid())
-  { 
-    if (gps.time.hour() < 10){ Serial.print(F("0")); file.print(F("0"));}
-    Serial.print(gps.time.hour());
-    Serial.print(F(":"));
-    //SD
-    file.print(gps.time.hour());
-    file.print(F(":"));
-
-
-    if (gps.time.minute() < 10){ Serial.print(F("0")); file.print(F("0"));}
-    Serial.print(gps.time.minute());
-    Serial.print(F(":"));
-    //SD
-    file.print(gps.time.minute());
-    file.print(F(":"));
-
-    if (gps.time.second() < 10){ Serial.print(F("0")); file.print(F("0"));}
-    Serial.print(gps.time.second());
-    Serial.println(F("."));
-    //SD
-    file.print(gps.time.second());
-    file.println(F("."));
-
-  }
-  else
-  {
-    Serial.println(F("INVALID"));
-    file.println(F("Invalid"));
-  }
+  //Save and print GPS Data to Serial and SD card
+  Serial.println(GPSData);
+  file.println(GPSData);
+  //Save and print BMP280 Data to Serial and SD card
+  Serial.println(bmpData);
+  file.println(bmpData);
+  //Save and print Magnetometer Data to Serial and SD card
+  //Serial.println(MagData);
+  //file.println(MagData);
+  //Save and print flight time Data to Serial and SD card
+  Serial.println(FlightTime);
+  file.println(FlightTime);
+  
   file.println();
-  file.close();
+  file.close(); //Sclose SD file
   Serial.println();
 
-  if (millis() - startTime > interval)
-  {
+  if (millis() - startTime > interval){ //Checks if the interval has passed for data transmission
     startTime = millis();
-    TransmitData();
-    tone(buzzerPin, 1000, 200);
+    TransmitData(); //Transmits data through LoRa
   }
-  if (millis() - startTime > CoursePeriod)
-  {
-    Serial.println("Heading:");
-    Serial.println(gps.course.deg());
-    Serial.println("Target:");
-    Serial.println(gps.course.deg());
-    CourseCorrect(gps.course.deg());
-  }
+
 
 }
-
+ //tone(buzzerPin, 1000, 200);
 void TransmitData()
 {
   LoRa.beginPacket();
-  LoRa.print("Location:");
-  if (gps.location.isValid())
-  {
-    LoRa.print(gps.location.lat(), 6);
-    LoRa.print(F(", "));
-    LoRa.println(gps.location.lng(), 6);
-  }
-  else
-  {
-    LoRa.println(F("INVALID"));
-  }
-  LoRa.print("Temp:");
-  LoRa.print(bmp.readTemperature());
-  LoRa.println(" C");
-  //Pressure
-  LoRa.print("Pressure:");
-  LoRa.print(bmp.readPressure()/100.0F);
-  LoRa.println(" hPa");
-  //Altitude
-  LoRa.print("Altitude:");
-  LoRa.print(bmp.readAltitude(1013.25)); //Standard Pressure at Sea level(hPa)
-  LoRa.println("m");
-
-  LoRa.print(F("  Date/Time: "));
-  if (gps.date.isValid())
-  {
-    LoRa.print(gps.date.month());
-    LoRa.print(F("/"));
-    LoRa.print(gps.date.day());
-    LoRa.print(F("/"));
-    LoRa.print(gps.date.year());
-  }
-  else
-  {
-    LoRa.print(F("INVALID"));
-  }
-  LoRa.print(F(" "));
-  if (gps.time.isValid())
-  {
-    if (gps.time.hour() < 10){ LoRa.print(F("0"));}
-    LoRa.print(gps.time.hour());
-    LoRa.print(F(":"));
-    if (gps.time.minute() < 10){ LoRa.print(F("0")); }
-    LoRa.print(gps.time.minute());
-    LoRa.print(F(":"));
-    if (gps.time.second() < 10){ LoRa.print(F("0"));}
-    LoRa.print(gps.time.second());
-    LoRa.println(F("."));
-  }
-  else
-  {
-    LoRa.println(F("INVALID"));
-  }
+  LoRa.print("P#");
+  LoRa.println(packetNum);
+  LoRa.println(GPSData);
+  LoRa.println(bmpData);
+  //LoRa.println(MagData);
+  LoRa.print(FlightTime);
   LoRa.println();
-
   LoRa.endPacket();
+  packetNum++;
 }
 
-void CourseCorrect(float heading)
+void CourseCorrect(int heading, int targethdg)
 {
-  double courseToDest = gps.courseTo(gps.location.lat(), gps.location.lng(), 48.8584, 2.2945);
-  int courseChange = (int)(360 + courseToDest - heading) % 360;
+  int courseChange = (int)(360 + targethdg - heading) % 360; //Adds 360 to the target  heading then subtracts the heading(To make sure the value is positive). The % 360 handles rotations above 360 degrees
+  //Finds least positive coterminal angle 
 
-  if (courseChange >= 345 || courseChange < 15)
+  if (courseChange >= 345 || courseChange < 15) //If the correction needed is less than 15 degrees, the Cansat goes straight
   {
     servoLeft.write(0);
     servoRight.write(0);
   }
-   else if (courseChange < 345 && courseChange > 180)
+   else if (courseChange < 345 && courseChange > 180) // If the correction needed is between 180 and 345, turning right would be faster(Turns right)
   {
     //Turn Right
     Serial.println("Turning Right");
     servoRight.write(-20);
   }
-  else if (courseChange > 15 && courseChange <= 180)
+  else if (courseChange > 15 && courseChange <= 180) //If the correction needed is between 15 and 180, the shortest turn is left(Turns Left)
   {
     Serial.println("Turning Left");
     servoLeft.write(-20);
   }
   
+  CourseCorrectTime(alt);
+}
+//Might be unessasary
+void CourseCorrectTime(float _alt)
+{
+  if (_alt < 350) //increases the Frequency of course correct under a certain altitude(Currently 350m) 
+  {
+    CoursePeriod = 200; //Increases frequency to 5Hz
+  }
+}
 
+
+void ParseBMP()
+{
+  alt = bmp.readAltitude(GND_P);
+  bmpData = ("BMP: " + String(bmp.readTemperature()) + ", " + String(bmp.readPressure()/100.00F) + ", " + String(alt));
+}
+
+void ParseGPS(bool fix)
+{
+  float lat = gps.location.lat();
+  float lng = gps.location.lng();
+  ang = gps.course.deg();
+  tAng = gps.courseTo(lat, lng, TARGET_LAT, TARGET_LNG);
+  
+  if (fix){
+    GPSData = ("GPS: " + String(lat) + ", " + String(lng) + ", " + String(ang) + ", " + String(tAng));
+  } else{
+    GPSData = "GPS: INV, INV, INV, INV";
+  }
+  
+}
+
+void ParseFlightTime(){
+
+  int hour = gps.time.hour();
+  int minute = gps.time.minute();
+  int second = gps.time.second();
+  FlightTime = ("TIME: " + String(hour) + ":" + String(minute) + ":" + String(second));
+
+}
+
+void ParseMAG()
+{
+  //Parse magnetometer info...
 }
