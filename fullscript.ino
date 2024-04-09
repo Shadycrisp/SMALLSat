@@ -33,7 +33,7 @@ void setup()
   Serial.begin(115200);
   Serial1.begin(GPSBaud);
   //BMP initialization
- if (!bmp.begin())
+ if (!bmp.begin(0x77))
  {
   Serial.println("Could not find valid BMP280");
   while (1);
