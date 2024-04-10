@@ -27,8 +27,8 @@ void draw() {
 void serialEvent(Serial myPort) {
   serialData = myPort.readStringUntil('\n');
   serialData = trim(serialData);
-             //Data from arudino has to be set the same, "\n" between each readings, and "MAG,x,y,z" for magnetometer output
-  if (serialData.startsWith("MAG,")) {
+             //Data from arudino has to be set the same, "\n" between each readings, and "MAG:x,y,z" for magnetometer output
+  if (serialData.startsWith("MAG:")) {
     String[] magData = split(serialData.substring(4), ',');
     if (magData.length == 4) { 
    
