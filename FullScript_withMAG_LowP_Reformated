@@ -5,7 +5,7 @@
 #include <Adafruit_BMP280.h>
 #include <SD.h>
 #include <LoRa.h>
-#include <Servo.h> // this doesnt work with teensy 4.1
+#include <Servo.h>
 #include <Wire.h>
 
 //MAG
