@@ -41,10 +41,18 @@ Servo servoRight;
 File file;
 const uint32_t buzzerPin = 2;
 
+//Buzzer
+float buzzerTimer = 200;
+float buzz = false;
+#define BUZZ_PIN 4
 
 float startTime = 0;
 float interval = 500; //Frequency of transmittion. Currently 2Hz
 float CoursePeriod = 500; //Frequency of course correction. Currently 2Hz
+
+
+
+
 
 String bmpData;
 String GPSData;
@@ -76,9 +84,10 @@ void setup()
   
   Wire.begin();
   if (initRM3100()) {
-    Serial.println("Magnetometer successfully initialized.");
+    Serial.println("Mag works");
   } else {
     Serial.println("Magnetometer initialization failed.");
+    while(1);
   }
 
   startTime = millis();
@@ -86,16 +95,7 @@ void setup()
 
 void loop()
 {
-  if (bmp.readAltitude(1013.25) > 650)
-  {
-    CoursePeriod = 1500;
-  } else if (bmp.readAltitude(1013.25) > 400)
-  {
-    CoursePeriod = 1000;
-  } else
-  {
-    CoursePeriod = 500;
-  } 
+   
   // This sketch displays information every time a new sentence is correctly encoded.
   while (Serial1.available() > 0){
     if (gps.encode(Serial1.read())) { //Difference between if and else is the ParseGPS() method(Attempting to parse only when there is valid data coming in)
@@ -156,10 +156,28 @@ void displayInfo()
   file.println();
   file.close(); //Sclose SD file
   Serial.println();
+  /*
+  if (lowPower && millis() - startTime > buzzerTimer)
+  {
+    if (!buzz)
+    {
+      tone(BUZZ_PIN,1000);
+      buzz = true;
+    } else
+    {
+      noTone(BUZZ_PIN);
+      buzz = false;
+    }
+  }
+  */
+
+
+
 
   if (millis() - startTime > interval){ //Checks if the interval has passed for data transmission
     startTime = millis();
     TransmitData(); //Transmits data through LoRa
+    tone(BUZZ_PIN, 1000, 200);
   }
 
 
@@ -247,12 +265,12 @@ void ParseMAG()
 {
   float x, y, z;
   // Assuming data is ready, read from the data registers (24h to 2Ch for X, Y, Z axes)
-  Wire.beginTransmission(RM3100_Address);
+  Wire.beginTransmission((uint8_t)RM3100_Address);
   Wire.write(0xA4); // Starting address for X-axis data
   Wire.endTransmission();
-  Wire.requestFrom(RM3100_Address, 9); // Request 9 bytes for X, Y, Z, 
+  Serial.println(Wire.requestFrom(RM3100_Address,(uint8_t) 9)); // Request 9 bytes for X, Y, Z, 
   
-  if(Wire.available() == 9) {
+  if(Wire.available() == (uint8_t)9) {
     // Convert readings from 2's complement to integer, then to nT
     float sensitivity = 13; // Sensitivity in nT, calculated from cycle count
     
@@ -261,14 +279,14 @@ void ParseMAG()
     z = convert(Wire.read(), Wire.read(), Wire.read()) * sensitivity; //3 bytes
     MagData = ("MAG:" + String(x) + "," + String(y) + "," + String(z));
   }else{
-    MagData = ("MAG:" + 0 + "," + 0 + "," + 0);
+    MagData = "MAG:0,0,0";
     Serial.println("mag data not 9bytes");
   }
 }
 
 bool LowPower()
 {
-  if (gps.speed < 2) //Check if the speed of the cansat is lower than 2m/s
+  if (gps.speed.value() < 2) //Check if the speed of the cansat is lower than 2m/s
   {
     return true;
   } else
@@ -280,31 +298,17 @@ bool LowPower()
  //Initializing MAG:
 
 bool initRM3100() {
-  /*
-  // Set and verify Cycle Count Registers for X, Y, Z to 200
-  // X Axis
-  if (!setAndVerifyRegister(0x04, 0x00, 0x00)) return false; // X Axis Cycle Count MSB
-  if (!setAndVerifyRegister(0x05, 0xC8, 0x00)) return false; // X Axis Cycle Count LSB
-
-  // Y Axis
-  if (!setAndVerifyRegister(0x06, 0x00, 0x00)) return false; // Y Axis Cycle Count MSB
-  if (!setAndVerifyRegister(0x07, 0xC8, 0x00)) return false; // Y Axis Cycle Count LSB
-
-  // Z Axis
-  if (!setAndVerifyRegister(0x08, 0x00, 0x00)) return false; // Z Axis Cycle Count MSB
-  if (!setAndVerifyRegister(0x09, 0xC8, 0x00)) return false; // Z Axis Cycle Count LSB
-  */ //The magnetometer's defualt cycle count is 200, no need to set, and 13nT sensitivity is the lowest we can go I think, since lowest cycle count is 200
-
+ 
   // Initiate and verify Continuous Measurement Mode
 
-  uint8_t regAddress = 0x01;
+  uint8_t regAddress = 0x00;
   uint8_t valueToSet = 0x79;
   uint8_t isCMMRegister = 0x01;
 
-  Wire.beginTransmission(RM3100_Address);
+  Wire.beginTransmission((uint8_t)RM3100_Address);
   Wire.write(regAddress);
   Wire.write(valueToSet);
-  if (Wire.endTransmission() != 0) return false; // Check if transmission was successful
+  if (Wire.endTransmission() == 0) return false; // Check if transmission was successful
 
   // For CMM register, we skip read-back verification as its value might change due to its operation
   if (isCMMRegister) return true;
@@ -312,9 +316,9 @@ bool initRM3100() {
   // Read back and verify the value for non-CMM registers
   Wire.beginTransmission(RM3100_Address);
   Wire.write(regAddress);
-  if (Wire.endTransmission(false) != 0) return false; // Restart condition for repeated start
+  if (Wire.endTransmission() == 0) return false; // Restart condition for repeated start
   
-  Wire.requestFrom(RM3100_Address, (uint8_t)1);
+  Wire.requestFrom(RM3100_Address,(uint8_t) 1);
   if (Wire.available()) {
     uint8_t readValue = Wire.read();
     if (readValue != valueToSet) return false;
