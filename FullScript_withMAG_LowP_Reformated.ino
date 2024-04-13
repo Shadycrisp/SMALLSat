@@ -6,10 +6,11 @@
 #include <SD.h>
 #include <LoRa.h>
 #include <Servo.h> // This doesnt work with teensy 4.1
-#include <Wire.h>
+#include <SPI.h>
 
 //MAG
-const uint8_t RM3100_Address = 0x20; //either 20 or 21 or 22
+const int csPin = 3; // Chip Select pin for SPI1
+const int drdyPin = 7; // DRDY pin connected to pin 9 on Teensy
 
 //GPS
 const uint32_t GPSBaud = 9600;
@@ -82,13 +83,7 @@ void setup()
   LoRa.setPins(cs, rst, dio0); //Set LoRa pins to correct connections
   if (!LoRa.begin(frequency)) Serial.println("LoRa failed"); //LoRa Initialization Undecided Fail Condition
   
-  Wire.begin();
-  if (initRM3100()) {
-    Serial.println("Mag works");
-  } else {
-    Serial.println("Magnetometer initialization failed.");
-    while(1);
-  }
+  initRM3100();
 
   startTime = millis();
 }
@@ -261,29 +256,6 @@ void ParseFlightTime(){
 
 }
 
-void ParseMAG()
-{
-  float x, y, z;
-  // Assuming data is ready, read from the data registers (24h to 2Ch for X, Y, Z axes)
-  Wire.beginTransmission((uint8_t)RM3100_Address);
-  Wire.write(0xA4); // Starting address for X-axis data
-  Wire.endTransmission();
-  Serial.println(Wire.requestFrom(RM3100_Address,(uint8_t) 9)); // Request 9 bytes for X, Y, Z, 
-  
-  if(Wire.available() == (uint8_t)9) {
-    // Convert readings from 2's complement to integer, then to nT
-    float sensitivity = 13; // Sensitivity in nT, calculated from cycle count
-    
-    x = convert(Wire.read(), Wire.read(), Wire.read()) * sensitivity; //3 bytes
-    y = convert(Wire.read(), Wire.read(), Wire.read()) * sensitivity; //3 bytes
-    z = convert(Wire.read(), Wire.read(), Wire.read()) * sensitivity; //3 bytes
-    MagData = ("MAG:" + String(x) + "," + String(y) + "," + String(z));
-  }else{
-    MagData = "MAG:0,0,0";
-    Serial.println("mag data not 9bytes");
-  }
-}
-
 bool LowPower()
 {
   if (gps.speed.value() < 2) //Check if the speed of the cansat is lower than 2m/s
@@ -295,44 +267,43 @@ bool LowPower()
   }
 }
 
- //Initializing MAG:
+void ParseMAG()
+{
+  if (digitalRead(drdyPin)) {  // Check if data is ready
+    digitalWrite(csPin, LOW);
 
-bool initRM3100() {
- 
-  // Initiate and verify Continuous Measurement Mode
+    SPI1.transfer(0xA4); // Address of the X-axis MSB to initiate reading
+    long x = SPI1.transfer(0x00);  //first byte
+    x = (x << 8) | SPI1.transfer(0x00);  //second byte
+    x = (x << 8) | SPI1.transfer(0x00);  //third byte
 
-  uint8_t regAddress = 0x00;
-  uint8_t valueToSet = 0x79;
-  uint8_t isCMMRegister = 0x01;
+    long y = SPI1.transfer(0x00);  // Y
+    y = (y << 8) | SPI1.transfer(0x00);
+    y = (y << 8) | SPI1.transfer(0x00);
 
-  Wire.beginTransmission((uint8_t)RM3100_Address);
-  Wire.write(regAddress);
-  Wire.write(valueToSet);
-  if (Wire.endTransmission() == 0) return false; // Check if transmission was successful
+    long z = SPI1.transfer(0x00);  // Z
+    z = (z << 8) | SPI1.transfer(0x00);
+    z = (z << 8) | SPI1.transfer(0x00);
 
-  // For CMM register, we skip read-back verification as its value might change due to its operation
-  if (isCMMRegister) return true;
+    MagData = "MAG:" + String(x) + "," + String(y) + "," + String(z);
 
-  // Read back and verify the value for non-CMM registers
-  Wire.beginTransmission(RM3100_Address);
-  Wire.write(regAddress);
-  if (Wire.endTransmission() == 0) return false; // Restart condition for repeated start
-  
-  Wire.requestFrom(RM3100_Address,(uint8_t) 1);
-  if (Wire.available()) {
-    uint8_t readValue = Wire.read();
-    if (readValue != valueToSet) return false;
-  } else {
-    return false; // No data received
+    digitalWrite(csPin, HIGH);
+
+    Serial.println(MagData);
   }
-  return true; // If all verifications passed
 }
 
-int32_t convert(uint8_t msb, uint8_t mid, uint8_t lsb) {
-  // Convert 3-byte 2's complement to signed 32-bit integer
-  int32_t value = ((int32_t)msb << 16) | ((int32_t)mid << 8) | lsb;
-  if (value & 0x00800000) { // Check if the value is negative
-    value |= 0xFF000000; // Extend the sign bit
-  }
-  return value;
+void initRM3100() {
+  pinMode(csPin, OUTPUT);
+  pinMode(drdyPin, INPUT); 
+
+  SPI1.begin();
+
+  // Configure the RM3100
+  digitalWrite(csPin, HIGH);
+  delay(10);
+  digitalWrite(csPin, LOW);
+  SPI1.transfer(0x01); // CMM register address
+  SPI1.transfer(0x79); //continuous measurement on all axes, no alarm
+  digitalWrite(csPin, HIGH);
 }
