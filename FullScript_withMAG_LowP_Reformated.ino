@@ -30,6 +30,7 @@ int packetNum = 1;
 //BMP280 Object
 Adafruit_BMP280 bmp;
 float alt;
+float preAlt;
 #define GND_P 1013.25
 
 //Servos
@@ -45,6 +46,8 @@ const uint32_t buzzerPin = 2;
 //Buzzer
 float buzzerTimer = 200;
 float buzz = false;
+int altCounter = 4;
+bool extended = false;
 #define BUZZ_PIN 4
 
 float startTime = 0;
@@ -60,7 +63,7 @@ String GPSData;
 String MagData;
 String FlightTime;
 
-bool lowPower = false;
+
 
 
 void setup()
@@ -83,7 +86,7 @@ void setup()
   LoRa.setPins(cs, rst, dio0); //Set LoRa pins to correct connections
   if (!LoRa.begin(frequency)) Serial.println("LoRa failed"); //LoRa Initialization Undecided Fail Condition
   
-  initRM3100();
+  initRM3100(); //Initialize BMP Sensor
 
   startTime = millis();
 }
@@ -102,18 +105,15 @@ void loop()
     ParseBMP(); //Parses BMP Data
     ParseMAG(); //Parses Magnetometer data
     displayInfo(); //Displays all info to serial/saves data to SD
-    if (!lowPower) //If the cansat is not in low power mode, course correcting adjustments can still be made, otherwise the servos are detached to save power.
+    if (extended) //If the cansat is not in low power mode, course correcting adjustments can still be made, otherwise the servos are detached to save power.
     {
       if (millis() - startTime > CoursePeriod) { //Course corrects at the set frequency.
         CourseCorrect(ang, tAng);
         startTime = millis();
       } 
-    } else {
-      servoLeft.detach();
-      servoRight.detach();
     }
     
-    lowPower = LowPower(); //Checks if the cansat is stationary.
+    
 
   } 
   if (millis() > 5000 && gps.charsProcessed() < 10)
@@ -151,20 +151,7 @@ void displayInfo()
   file.println();
   file.close(); //Sclose SD file
   Serial.println();
-  /*
-  if (lowPower && millis() - startTime > buzzerTimer)
-  {
-    if (!buzz)
-    {
-      tone(BUZZ_PIN,1000);
-      buzz = true;
-    } else
-    {
-      noTone(BUZZ_PIN);
-      buzz = false;
-    }
-  }
-  */
+  
 
 
 
@@ -199,19 +186,21 @@ void CourseCorrect(int heading, int targethdg)
 
   if (courseChange >= 345 || courseChange < 15) //If the correction needed is less than 15 degrees, the Cansat goes straight
   {
-    servoLeft.write(0);
-    servoRight.write(0);
+    servoLeft.write(180);
+    servoRight.write(180);
   }
    else if (courseChange < 345 && courseChange > 180) // If the correction needed is between 180 and 345, turning right would be faster(Turns right)
   {
     //Turn Right
     Serial.println("Turning Right");
-    servoRight.write(-20);
+    servoRight.write(160);
+    servoLeft.write(180);
   }
   else if (courseChange > 15 && courseChange <= 180) //If the correction needed is between 15 and 180, the shortest turn is left(Turns Left)
   {
     Serial.println("Turning Left");
-    servoLeft.write(-20);
+    servoLeft.write(160);
+    servoRight.write(180);
   }
   
   CourseCorrectTime(alt);
@@ -229,6 +218,8 @@ void CourseCorrectTime(float _alt)
 void ParseBMP()
 {
   alt = bmp.readAltitude(GND_P);
+  if (altCounter == 4){LowPower(); preAlt = alt; altCounter = 0;}
+  else { altCounter++;}
   bmpData = ("BMP: " + String(bmp.readTemperature()) + ", " + String(bmp.readPressure()/100.00F) + ", " + String(alt));
 }
 
@@ -258,12 +249,22 @@ void ParseFlightTime(){
 
 bool LowPower()
 {
-  if (gps.speed.value() < 2) //Check if the speed of the cansat is lower than 2m/s
+  if (alt - preAlt > 5) //Check if the speed of the cansat is decendimg more that 5 meters
   {
-    return true;
+    extended = true;
+    servoLeft.attach(LEFT_PIN);
+    servoRight.attach(RIGHT_PIN);
+    servoLeft.write(180);
+    servoRight.write(180);
+    return false;
   } else
   {
-    return false;
+    servoLeft.write(0);
+    servoRight.write(0);
+    servoLeft.detach();
+    servoRight.detach();
+    extended = false;
+    return true;
   }
 }
 
