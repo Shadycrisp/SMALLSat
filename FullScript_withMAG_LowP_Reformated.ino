@@ -1,11 +1,13 @@
-
+//#################################
+//S.M.A.L.L Sat Internal Code
+//#################################
 //Libraries
 #include <TinyGPSPlus.h>
 #include <SoftwareSerial.h>
 #include <Adafruit_BMP280.h>
 #include <SD.h>
 #include <LoRa.h>
-#include <Servo.h> // This doesnt work with teensy 4.1
+#include <Servo.h>
 #include <SPI.h>
 
 //MAG
@@ -22,14 +24,16 @@ float tAng; //Target (Taget Angle)
 
 //LoRa
 const int frequency = 433E6;
-const uint32_t cs = 10;
-const uint32_t rst = 9;
-const uint32_t dio0 = 13;
+#define CS 10
+#define RST 9
+#define DIO0  13
 int packetNum = 1;
 
 //BMP280 Object
 Adafruit_BMP280 bmp;
 float alt;
+float preAlt;
+float apogee;
 #define GND_P 1013.25
 
 //Servos
@@ -40,16 +44,26 @@ Servo servoRight;
 
 //SD 
 File file;
-const uint32_t buzzerPin = 2;
+
 
 //Buzzer
 float buzzerTimer = 200;
-float buzz = false;
-#define BUZZ_PIN 4
+//float buzz = false;
+int altCounter = 10;
+bool extended = false;
+bool transmitted = false;
+#define BUZZ_PIN 2
 
+
+//Timer Variables
 float startTime = 0;
 float interval = 500; //Frequency of transmittion. Currently 2Hz
 float CoursePeriod = 500; //Frequency of course correction. Currently 2Hz
+float loopPeriod = 100; // 10 Hz loops
+float loopStart = 0;
+
+bool buzz = false;
+
 
 
 
@@ -60,7 +74,7 @@ String GPSData;
 String MagData;
 String FlightTime;
 
-bool lowPower = false;
+
 
 
 void setup()
@@ -80,12 +94,13 @@ void setup()
   file.println("Log Begin:"); 
   file.close();
 
-  LoRa.setPins(cs, rst, dio0); //Set LoRa pins to correct connections
+  LoRa.setPins(CS, RST, DIO0); //Set LoRa pins to correct connections
   if (!LoRa.begin(frequency)) Serial.println("LoRa failed"); //LoRa Initialization Undecided Fail Condition
-  
-  initRM3100();
-
+   
+  initRM3100(); //Initialize Magnetometer Sensor
+  //Initialize Timers
   startTime = millis();
+  loopStart = millis();
 }
 
 void loop()
@@ -93,38 +108,49 @@ void loop()
    
   // This sketch displays information every time a new sentence is correctly encoded.
   while (Serial1.available() > 0){
-    if (gps.encode(Serial1.read())) { //Difference between if and else is the ParseGPS() method(Attempting to parse only when there is valid data coming in)
-      ParseGPS(true);
-    } else {
-      ParseGPS(false);
-    }
-   
-    ParseBMP(); //Parses BMP Data
-    ParseMAG(); //Parses Magnetometer data
-    displayInfo(); //Displays all info to serial/saves data to SD
-    if (!lowPower) //If the cansat is not in low power mode, course correcting adjustments can still be made, otherwise the servos are detached to save power.
+    if (millis() - loopStart > loopPeriod)
     {
-      if (millis() - startTime > CoursePeriod) { //Course corrects at the set frequency.
-        CourseCorrect(ang, tAng);
-        startTime = millis();
-      } 
-    } else {
-      servoLeft.detach();
-      servoRight.detach();
+      if (gps.encode(Serial1.read())) { //Difference between if and else is the ParseGPS() method(Attempting to parse only when there is valid data coming in)
+      ParseGPS(true);
+      } else {
+      ParseGPS(false);
+      }
+      if (!extended)
+      {
+      Deploy();
+      }
+    
+      ParseBMP(); //Parses BMP Data
+      ParseMAG(); //Parses Magnetometer data
+      ParseFlightTime();
+      displayInfo(); //Displays all info to serial/saves data to SD
+      if (extended) //If the cansat is not in low power mode, course correcting adjustments can still be made, otherwise the servos are detached to save power.
+      {
+        if (millis() - startTime > CoursePeriod) { //Course corrects at the set frequency.
+          CourseCorrect(ang, tAng);
+          startTime = millis();
+        } 
+      }
+      loopStart = millis();
+
     }
     
-    lowPower = LowPower(); //Checks if the cansat is stationary.
+    
 
   } 
   if (millis() > 5000 && gps.charsProcessed() < 10)
   {
+    if (millis()- loopStart > loopPeriod)
+    {
     Serial.println("GPS is offline :/");
     ParseBMP();
     ParseMAG();
+    ParseFlightTime();
     displayInfo();
     Serial.println("Course Correct Failure(Unable to get location data)");
     servoLeft.detach();
     servoRight.detach();
+    }
   }
 }
 
@@ -147,24 +173,12 @@ void displayInfo()
   //Save and print flight time Data to Serial and SD card
   Serial.println(FlightTime);
   file.println(FlightTime);
+
   
   file.println();
   file.close(); //Sclose SD file
   Serial.println();
-  /*
-  if (lowPower && millis() - startTime > buzzerTimer)
-  {
-    if (!buzz)
-    {
-      tone(BUZZ_PIN,1000);
-      buzz = true;
-    } else
-    {
-      noTone(BUZZ_PIN);
-      buzz = false;
-    }
-  }
-  */
+  
 
 
 
@@ -172,7 +186,10 @@ void displayInfo()
   if (millis() - startTime > interval){ //Checks if the interval has passed for data transmission
     startTime = millis();
     TransmitData(); //Transmits data through LoRa
-    tone(BUZZ_PIN, 1000, 200);
+    if (!buzz) {tone(BUZZ_PIN, 1000); buzz = true;}
+    else {noTone(BUZZ_PIN); buzz = false;}
+    
+    
   }
 
 
@@ -180,6 +197,7 @@ void displayInfo()
  //tone(buzzerPin, 1000, 200);
 void TransmitData()
 {
+  Serial.println("Transmitting...");
   LoRa.beginPacket();
   LoRa.print("P#");
   LoRa.println(packetNum);
@@ -187,6 +205,11 @@ void TransmitData()
   LoRa.println(bmpData);
   LoRa.println(MagData);
   LoRa.print(FlightTime);
+  if (extended && !transmitted)
+  {
+    LoRa.println("SERVOS EXTENDED:");
+    LoRa.println(servoLeft.read());
+  }
   LoRa.println();
   LoRa.endPacket();
   packetNum++;
@@ -199,19 +222,21 @@ void CourseCorrect(int heading, int targethdg)
 
   if (courseChange >= 345 || courseChange < 15) //If the correction needed is less than 15 degrees, the Cansat goes straight
   {
-    servoLeft.write(0);
-    servoRight.write(0);
+    servoLeft.write(180);
+    servoRight.write(180);
   }
    else if (courseChange < 345 && courseChange > 180) // If the correction needed is between 180 and 345, turning right would be faster(Turns right)
   {
     //Turn Right
     Serial.println("Turning Right");
-    servoRight.write(-20);
+    servoRight.write(140);
+    servoLeft.write(180);
   }
   else if (courseChange > 15 && courseChange <= 180) //If the correction needed is between 15 and 180, the shortest turn is left(Turns Left)
   {
     Serial.println("Turning Left");
-    servoLeft.write(-20);
+    servoLeft.write(140);
+    servoRight.write(180);
   }
   
   CourseCorrectTime(alt);
@@ -229,6 +254,11 @@ void CourseCorrectTime(float _alt)
 void ParseBMP()
 {
   alt = bmp.readAltitude(GND_P);
+  if (altCounter == 10){ preAlt = alt; altCounter = 0;} //Only get data every 10 transmittions(1 second)
+  else { altCounter++;}
+  if (alt < preAlt) { apogee = preAlt;} else {apogee = alt;} //Finds Apogee
+  
+     
   bmpData = ("BMP: " + String(bmp.readTemperature()) + ", " + String(bmp.readPressure()/100.00F) + ", " + String(alt));
 }
 
@@ -256,15 +286,20 @@ void ParseFlightTime(){
 
 }
 
-bool LowPower()
+void Deploy()
 {
-  if (gps.speed.value() < 2) //Check if the speed of the cansat is lower than 2m/s
+  if (alt - apogee >= 50)
   {
-    return true;
-  } else
-  {
-    return false;
+    
+    servoLeft.attach(LEFT_PIN);
+    servoRight.attach(RIGHT_PIN);
+    servoLeft.write(180);
+    servoRight.write(180);
+    extended = true;
+    Serial.println("Cansat Arms Deployed...");
   }
+
+
 }
 
 void ParseMAG()
