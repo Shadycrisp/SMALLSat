@@ -11,7 +11,7 @@ degrees = []
 distances = []
 MagY = []
 packetNum = 6
-filepath = "data2.txt"
+filepath = "newDataFormat.txt"
 fig, ax = plt.subplots()
 
 datafile = open(filepath, "r")
