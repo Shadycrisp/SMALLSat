@@ -6,3 +6,7 @@ This repository contains all the software used in the physical S.M.A.L.L. Sat as
 The finalized code can be found in the file CansatcodeFinah.ino, Groundstation.ino, and the folder Python Data Analysis.
 
 Godspeed to S.M.A.L.L. Sat!🚀
+
+S.M.A.L.L. Sat finished 2nd in the Cansat in Greece 2024 competition🥈🥳🥳!!!
+
+
