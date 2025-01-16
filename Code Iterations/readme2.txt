@@ -1,0 +1,1 @@
+In this folder there are all previous iterations of both the S.M.A.L.L. Sat code and the Ground station code. These files are either not functional or not complete compared to the final scripts. They are kept as memories/old versions of our code.
